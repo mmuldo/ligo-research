@@ -52,12 +52,13 @@ def auxiliary_data_to_spectrogram(
 def main():
     specgram = auxiliary_data_to_spectrogram(stride=20, fftlength=8, overlap=4)
 
-    plot = specgram.plot(norm='log', vmin=1e-6, vmax=1e-4)
-    ax = plot.gca()
-    ax.set_ylim(10, 1000)
-    ax.set_yscale('log')
-    ax.colorbar(label='amplitude')
-    plot.show()
+    #plot = specgram.plot(norm='log', vmin=1e-6, vmax=1e-4)
+    #ax = plot.gca()
+    #ax.set_ylim(10, 1000)
+    #ax.set_yscale('log')
+    #ax.colorbar(label='amplitude')
+    #plot.show()
+    return specgram
 
 if __name__ == '__main__':
-    main()
+    specgram = main()
