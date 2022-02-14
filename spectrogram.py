@@ -2,6 +2,7 @@ from gwpy.timeseries import TimeSeries
 from gwpy.spectrogram import Spectrogram
 from datetime import datetime, timedelta
 from functools import reduce
+from typing import Optional
 
 import numpy as np
 
@@ -65,8 +66,22 @@ def quantize_psd(
         for band in bands
         ])
     
-def quantize_spectrogram():
-    pass
+def quantize_spectrogram(
+        spectrogram: Spectrogram,
+        low_frequency: Optional[float] = None,
+        high_frequency: Optional[float] = None,
+        ) -> np.ndarray:
+    cropped = spectrogram.crop_frequencies(
+            low_frequency,
+            high_frequency
+            )
+
+    df = cropped.df.value
+    f0 = low_frequency if low_frequency else cropped.f0.value
+    return np.array(
+            [quantize_psd(psd, df, f0) for psd in cropped.data.tolist()],
+            dtype=object)
+
 
 def main():
     CHANNEL='L1:LSC-DARM_OUT_DQ' 
@@ -85,3 +100,4 @@ def main():
 
 if __name__ == "__main__":
     specgram = main()["specgram"]
+    vectors = quantize_spectrogram(specgram, 0.01, 30)
