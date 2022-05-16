@@ -1,0 +1,6 @@
+channel:    'L1:LSC-DARM_OUT_DQ' 
+start:      '2017-08-14 09:01:34'
+end:        '2017-08-14 10:01:34'
+host:       'losc-nds.ligo.org'
+stride:     60
+fftlength:  60

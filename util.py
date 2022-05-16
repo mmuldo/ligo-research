@@ -5,6 +5,7 @@ from yaml.loader import SafeLoader
 from typing import Optional
 
 import yaml
+import nds2
 
 def yaml_to_spectrogram(
         filename: str,
@@ -31,9 +32,22 @@ def yaml_to_spectrogram(
             params = yaml.load(f, Loader=SafeLoader)
 
     return TimeSeries.fetch(
-            channel=params['channel'],
             start=datetime.fromisoformat(params['start']),
             end=datetime.fromisoformat(params['end']),
-            host=params['host']).spectrogram(
-                    stride=params['stride'],
-                    fftlength=params['fftlength'])
+            **{
+                k: v 
+                for k, v in params.items() 
+                if k not in [
+                    'start', 
+                    'end',
+                    'stride',
+                    'fftlength'
+                ]
+            }
+            #channel=params['channel'],
+            #host=params['host'],
+            #port=params['port'],
+            #connection=nds2.connection(params['host'],params['port'])
+    ).spectrogram(
+            stride=params['stride'],
+            fftlength=params['fftlength'])
