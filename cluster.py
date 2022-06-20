@@ -60,9 +60,14 @@ class ClusteredSpectrogram:
     ----------
     spectrogram : Spectrogram
         a spectrogram
+
     vectors : np.ndarray
         a quantization of the spectrogram, turning each PSD into a
         NUM_BANDS-dimensional vector
+
+    fitted_estimator : object
+        the result of computing the clustering
+
     labels : list[int]
         the cluster that each vector in vectors belongs to
 
@@ -71,25 +76,29 @@ class ClusteredSpectrogram:
     plot2D(dimension1, dimension2)
         creates a 2D scatter plot of the dimension1 coordinate vs the
         dimension2 coordinate of each vector in vectors, color-coded by labels
+
+    multiplot2D()
+        plots adjacent dimensions against each other all in one plot
     '''
     def __init__(
         self, 
-        timeseries_info_file: str, 
+        spectrogram: Spectrogram, 
         cluster_method: type,
         cluster_method_params: dict[str, Any]
     ):
         '''
         Parameters
         ----------
-        timeseries_info_file : str
-            file specifying the details of the timeseries data to fetch (see
-            timeseries-example.yml)
+        spectrogram : Spectrogram
+            the spectrogram to cluster
+
         cluster_method : type
             class from sklearn to use for clustering the vectors
+
         cluster_method_params : dict[str, Any]
             keyword arguments needed to instantiate the cluster_method class
         '''
-        self.spectrogram = util.yaml_to_spectrogram(timeseries_info_file)
+        self.spectrogram = spectrogram
 
         self.vectors = quantize_spectrogram(
             self.spectrogram, 
@@ -97,11 +106,13 @@ class ClusteredSpectrogram:
             MIN_FREQ * BANDWIDTH**NUM_BANDS
         )
 
-        self.labels = cluster_method(
+        self.fitted_estimator = cluster_method(
             **cluster_method_params
-        ).fit_predict(
+        ).fit(
             self.vectors
         )
+
+        self.labels = self.fitted_estimator.labels_
 
     def plot2D(
         self, 
@@ -112,7 +123,7 @@ class ClusteredSpectrogram:
         '''
         creates a 2D scatter plot of the dimension1 coordinate vs the
         dimension2 coordinate of each vector in vectors, color-coded by
-        the cluster labels
+        the cluster labels; also plots cluster centers
 
         Parameters
         ----------
@@ -123,10 +134,23 @@ class ClusteredSpectrogram:
         ax : plt.Axes
             plot coordinate system
         '''
+        centers = self.fitted_estimator.cluster_centers_
+
+        # plot the vectors
         plot = ax.scatter(
             self.vectors[:,dimension1], 
             self.vectors[:,dimension2],
             c=self.labels,
+            s=5,
+        )
+
+        # plot the vecter cluster centers
+        ax.scatter(
+            centers[:,dimension1], 
+            centers[:,dimension2],
+            c=[float(i) for i in range(len(centers))],
+            marker='x',
+            s=50,
         )
 
         ax.set_xlabel(axis_label(0))
