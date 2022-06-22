@@ -32,22 +32,22 @@ def yaml_to_spectrogram(
             params = yaml.load(f, Loader=SafeLoader)
 
     return TimeSeries.fetch(
-            start=datetime.fromisoformat(params['start']),
-            end=datetime.fromisoformat(params['end']),
-            **{
-                k: v 
-                for k, v in params.items() 
-                if k not in [
-                    'start', 
-                    'end',
-                    'stride',
-                    'fftlength'
-                ]
-            }
-            #channel=params['channel'],
-            #host=params['host'],
-            #port=params['port'],
-            #connection=nds2.connection(params['host'],params['port'])
+        start=datetime.fromisoformat(params['start']),
+        end=datetime.fromisoformat(params['end']),
+        # gives progress bar for downloading data
+        verbose=True,
+        # get any other options specified in yml file
+        **{
+            k: v 
+            for k, v in params.items() 
+            if k not in [
+                'start', 
+                'end',
+                'stride',
+                'fftlength'
+            ]
+        }
     ).spectrogram(
-            stride=params['stride'],
-            fftlength=params['fftlength'])
+        stride=params['stride'],
+        fftlength=params['fftlength']
+    )

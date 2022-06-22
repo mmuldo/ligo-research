@@ -14,19 +14,22 @@ def log_split(xs: np.ndarray, df: float, f0: float, base: float) -> np.ndarray:
 
     Parameters
     ----------
-    xs : `np.ndarray`
+    xs : np.ndarray
         quantized frequency spectrum, where each xs[i] corresponds to an
         amplitude
-    df : `float` 
+
+    df : float
         change in frequency between elements in xs
-    f0 : `float`
+
+    f0 : float
         frequency associated with xs[0] (must be positive)
-    base: `float`
+
+    base: float
         base of log
 
     Returns
     -------
-    `np.ndarray`
+    np.ndarray
         list of logarithmic bands
     """
     result = []
@@ -54,12 +57,14 @@ def log_split(xs: np.ndarray, df: float, f0: float, base: float) -> np.ndarray:
     
 
 def quantize_psd(
-        psd: np.ndarray, 
-        df: float,
-        f0: float) -> np.ndarray:
+    psd: np.ndarray, 
+    df: float,
+    f0: float,
+    base: float
+) -> np.ndarray:
     """Quantizes a PSD.
 
-    The PSD is quantized into `log_sqrt10(fn/f0)` values, where fn is the highest
+    The PSD is quantized into `log_base(fn/f0)` values, where fn is the highest
     frequency for the PSD.
     The value representing each band is the band's RMS^2. Since we are
     dealing with PSDs, this is given by simply computing the average value
@@ -67,33 +72,43 @@ def quantize_psd(
 
     Parameters
     ----------
-    psd : `np.ndarray`
+    psd : np.ndarray
         A Power Spectral Density, represented by an array of `floats`.
-    df : `float`
+
+    df : float
         Change in frequency between each index of `psd`.
+
+    f0 : float
+        frequency associated with xs[0] (must be positive)
+
+    base: float
+        base of log
 
     Returns
     -------
-    `np.ndarray`
-        An array of `log_sqrt10(fn/f0)` values where each value is the RMS^2 of 
+    np.ndarray
+        An array of log_base(fn/f0) values where each value is the RMS^2 of 
         the band it represents.
     """
 
-    # split PSD into half decade bands
-    bands = log_split(psd, df, f0, 10**(1/2))
+    # split PSD into bands
+    bands = log_split(psd, df, f0, base)
 
     return np.array([
         # RMS^2
         (1/len(band))*reduce(lambda x, y: x + y, band) 
         for band in bands])
     
+
 def quantize_spectrogram(
-        spectrogram: Spectrogram,
-        low_frequency: Optional[float] = None,
-        high_frequency: Optional[float] = None) -> np.ndarray:
+    spectrogram: Spectrogram,
+    low_frequency: Optional[float] = None,
+    high_frequency: Optional[float] = None,
+    base: float=10**(1/2)
+) -> np.ndarray:
     """quantizes each PSD in a spectrogram
 
-    Each PSD is quantized into `log_sqrt10(fn/f0)` values, where fn is the highest
+    Each PSD is quantized into `log_base(fn/f0)` values, where fn is the highest
     frequency for the PSD.
     The value representing each band is the band's RMS^2. Since we are
     dealing with PSDs, this is given by simply computing the average value
@@ -101,18 +116,23 @@ def quantize_spectrogram(
 
     Parameters
     ----------
-    spectrogram : `Spectrogram`
+    spectrogram : Spectrogram
         A spectrogram
-    low_frequency : `float`, optional
+
+    low_frequency : float, default=None
         lowest frequency to crop spectrogram to (default is None)
-    high_frequency : `float`, optional
+
+    high_frequency : float, default=None
         highest frequency to crop spectrogram to (default is None)
+
+    base : float, default = 10**(1/2)
+        base of log
 
     Returns
     -------
-    `np.ndarray`
+    np.ndarray
         An `m x n` matrix where `m = len(spectrogram)` (i.e. the number of
-        timed samples) and `n = log_sqrt10(high_frequency/low_frequency)`
+        timed samples) and `n = log_base(high_frequency/low_frequency)`
     """
 
     cropped = spectrogram.crop_frequencies( 
@@ -122,60 +142,14 @@ def quantize_spectrogram(
     df = cropped.df.value
     f0 = low_frequency if low_frequency else cropped.f0.value
     return np.array(
-            [
-                quantize_psd(
-                    np.array(psd, dtype=object), 
-                    df, 
-                    f0) 
-                for psd in cropped.data.tolist()],
-            dtype=object)
-
-
-def vectorize(
-        spectrogram: Spectrogram,
-        low_frequency: Optional[float] = None,
-        high_frequency: Optional[float] = None) -> np.ndarray:
-    """vectorizes a spectrogram
-
-    The first coordinate of each vector is the time and the tail coordinates
-    are the results of quantizing the PSD of the spectrogram at said time.
-
-    Parameters
-    ----------
-    spectrogram : `Spectrogram`
-        A spectrogram
-    low_frequency : `float`, optional
-        lowest frequency to crop spectrogram to (default is None)
-    high_frequency : `float`, optional
-        highest frequency to crop spectrogram to (default is None)
-
-    Returns
-    -------
-    `np.ndarray`
-        An `m x n` matrix where `m = len(spectrogram)` (i.e. the number of
-        timed samples) and `n = 1 + log_sqrt10(high_frequency/low_frequency)`
-    """
-    return np.array(
-            [
-                np.append(
-                    time, 
-                    quantize_spectrogram(
-                        spectrogram, 
-                        low_frequency, 
-                        high_frequency)) 
-                for time in spectrogram.xindex.to_value() ])
-
-
-if __name__ == "__main__":
-    with open('time-series.yml') as f:
-        params = yaml.load(f, Loader=SafeLoader)
-
-    specgram = TimeSeries.fetch(
-            channel=params['channel'],
-            start=datetime.fromisoformat(params['start']),
-            end=datetime.fromisoformat(params['end']),
-            host=params['host']).spectrogram(
-                    stride=params['stride'],
-                    fftlength=params['fftlength'])
-
-    vectors = quantize_spectrogram(specgram, 10**(-3/2), 10**(3/2))
+        [
+            quantize_psd(
+                np.array(psd, dtype=object), 
+                df, 
+                f0,
+                base
+            ) 
+            for psd in cropped.data.tolist()
+        ],
+        dtype=float
+    )
