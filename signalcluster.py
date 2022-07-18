@@ -8,136 +8,25 @@ from typing import Union, Literal
 import astropy.time
 import astropy.units
 import numpy as np
-from dataclasses import dataclass
 import yaml
 
 LIGOTimeGPSParsable = Union[float, datetime, astropy.time.Time, str]
 
-@dataclass
-class TimeSeriesVectors:
-    vectors: np.ndarray
-    times: Index
-    unit: astropy.units.Unit
+class BadHostFileError(BaseException):
+    pass
 
-    @classmethod
-    def from_timeseriesdict(
-        cls,
-        tsdict: TimeSeriesDict
-    ) -> TimeSeriesVectors:
-        tslist = list(tsdict.values())
+try:
+    with open('host.yml', 'r') as f:
+        host_dict = yaml.load(f, Loader=yaml.Loader)
+        HOST = host_dict['host']
+        PORT = host_dict['port']
+except FileNotFoundError:
+    # default if no host file specified
+    HOST = ''
+    PORT = 0
+except KeyError:
+    raise BadHostFileError(f'check your host.yml file and make sure you specified the "host" and "port" keys')
 
-        assert len(tslist) > 0
-
-        first_ts = tslist[0]
-
-        return TimeSeriesVectors(
-            vectors = np.array(tslist).T,
-            # assuming everything worked correctly, the times and unit
-            #   attributes should be the same for each time series
-            times = first_ts.times,
-            unit = first_ts.unit,
-        )
-
-    @classmethod
-    def from_channel_list(
-        cls,
-        channels: list[str],
-        host: str,
-        port: int,
-        start: LIGOTimeGPSParsable,
-        end: LIGOTimeGPSParsable,
-        verbose: bool
-    ) -> TimeSeriesVectors:
-        tsdict = TimeSeriesDict.fetch(
-            channels=channels,
-            host=host,
-            port=port,
-            start=start,
-            end=end,
-            verbose=verbose
-        )
-
-        return TimeSeriesVectors.from_timeseriesdict(tsdict)
-
-    @classmethod
-    def from_yaml(
-        cls,
-        filepath: str
-    ) -> TimeSeriesVectors:
-        with open(filepath, 'r') as f:
-            params = yaml.load(f, Loader=yaml.SafeLoader)
-
-        try:
-            return TimeSeriesVectors.from_channel_list(**params)
-        except ValueError as e:
-            raise ValueError(f'Bad yaml file. {e.args[0]}')
-
-    def cluster(
-        self, 
-        cluster_algorithm: SupportedClusterAlgorithms,
-        *cluster_algorithm_args,
-        **cluster_algorithm_kwargs
-    ) -> SupportedClusterAlgorithms:
-
-        clust = cluster_algorithm(
-            *cluster_algorithm_args, 
-            **cluster_algorithm_kwargs
-        )
-
-        clust.fit(self.vectors)
-
-        return clust
-
-
-def centers(
-    clustered_data: SupportedClusterAlgorithms, 
-    tsv: TimeSeriesVectors
-) -> list[tuple[np.ndarray, Index]]:
-    labeled_centers = {}
-
-    for i in range(len(tsv.vectors)):
-        label = clustered_data.labels_[i]
-        vector = tsv.vectors[i]
-        time = tsv.times[i]
-
-        try:
-            count, center, closest_vector_distance, closest_vector_time = labeled_centers[label]
-            center = (center*count + vector) / (count + 1)
-            count += 1
-            closer = np.linalg.norm(vector - center) < closest_vector_distance
-            closest_vector_distance = vector if closer else closest_vector_distance
-            closest_vector_time = time if closer else closest_vector_time
-        except KeyError:
-            labeled_centers[label] = (
-                0,
-                vector,
-                0,
-                time
-            )
-
-    return [
-        (center, closest_vector_time)
-        for _, center, _, closest_vector_time in labeled_centers.values()
-    ]
-
-def timeseries_psd(
-    ts: TimeSeries,
-    time: Index
-) -> FrequencySeries:
-    ts.psd()
-
-def yaml_to_timeseries(
-    filepath: str
-) -> TimeSeries:
-    with open(filepath, 'r') as f:
-        params = yaml.load(f, Loader=yaml.SafeLoader)
-    return TimeSeries.fetch(**params)
-
-def center_psd(ts, tsv):
-    cs = centers(tsv.cluster(KMeans, 5), tsv)
-    first = cs[0]
-    plot = ts.psd().plot()
-    plot.show()
 
 
 def timeseriesdict_to_vectors(tsdict: TimeSeriesDict) -> np.ndarray:
@@ -273,10 +162,10 @@ def times_of_centers(
 
 def psd(
     channel: str,
-    host: str,
-    port: int,
     time: float,
-    span: float
+    span: float,
+    host: str = HOST,
+    port: int = PORT,
 ) -> FrequencySeries:
     '''
     computes the psd for the timeseries taken from the given channel around the
@@ -286,14 +175,14 @@ def psd(
     ----------
     channel : str
         channel to grab the timeseries from
-    host : str
-        host of channel
-    port : str
-        port of channel at host
     time : float
         time (gps format) around which to compute the psd
     span : float
         number of seconds around time the the data will be taken at
+    host : str, optional
+        host of channel (default=HOST)
+    port : str, optional
+        port of channel at host (default=PORT)
     '''
     return TimeSeries.fetch(
         channel=channel,
